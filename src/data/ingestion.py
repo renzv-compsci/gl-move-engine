@@ -12,7 +12,8 @@ def fetch_synchronized_data(tickers: List[str], start: str = "2023-01-01", end: 
             end=end,
             interval="1d",
             auto_adjust=True,
-            progress=False
+            progress=False, 
+            threads=False
         )
 
         if raw_data is None or raw_data.empty:
@@ -23,9 +24,9 @@ def fetch_synchronized_data(tickers: List[str], start: str = "2023-01-01", end: 
             price_matrix = raw_data['Close']
         else: 
             price_matrix = raw_data[['Close']]
-            price_matrix.colums = tickers
+            price_matrix.columns = tickers
         
-        clean_matrix = price_matrix.dropna()
+        clean_matrix = price_matrix.ffill().dropna()
         if clean_matrix.index.tz is None: 
             clean_matrix.index = clean_matrix.index.tz_localize('UTC')
         else: 
