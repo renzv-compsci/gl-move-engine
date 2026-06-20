@@ -1,9 +1,17 @@
+import pandas as pd 
+import sys 
+import io
+
+if sys.platform.startswith('win'): 
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    print("Terminal pipe configured to utf-8")
+
 from src.data.ingestion import fetch_synchronized_data
 from src.utils.preprocessing import run_preprocessing_pipeline
 from src.models.clustering import run_pca_decomposition, evaluate_elbow_optimization, fit_final_regime_model, generate_regime_profiles
 from src.portfolio.execution import allocate_portfolio_by_regime
-import pandas as pd 
-
+from src.portfolio.backtest import run_portfolio_backtest
 
 def run_ingestion_pipeline() -> pd.DataFrame: 
     print(f"Initializing ingestion")
@@ -38,9 +46,30 @@ def main():
 
     pca_df, trained_pca = run_pca_decomposition(scaled_X, n_components=3)
     inertia_map = evaluate_elbow_optimization(pca_df, max_k=8)
+
+    print("\nFitting Definitive K-Means Model")
     labeled_timeline, final_kmeans_model = fit_final_regime_model(pca_df, n_clusters=4)
+   
+    if isinstance(labeled_timeline, pd.DataFrame): 
+        matched_col = None 
+        for col in labeled_timeline.columns: 
+            if any(k in col.lower() for k in ['cluster', 'regime', 'label']):
+                matched_col = col 
+                break
+
+            if matched_col: 
+                final_labels = labeled_timeline[matched_col].tolist()
+            else: 
+                final_labels = labeled_timeline.iloc[:, -1].tolist()
+    
+    elif isinstance(labeled_timeline, pd.Series): 
+        final_labels = labeled_timeline.tolist()
+    else: 
+        final_labels = list(labeled_timeline)
+    
     backtest_history, current_live_orders = allocate_portfolio_by_regime(labeled_timeline, total_capital=150000.0)
     regime_profiles = generate_regime_profiles(scaled_X, labeled_timeline)
+    
     print("Regime Profile Matrix")
     print(regime_profiles.round(3))
     
@@ -52,8 +81,21 @@ def main():
     for k, score in inertia_map.items():
         print(f"  └─ Clusters (k): {k} | Internal Distance Metric (Inertia): {score:.2f}")
 
+    print("\n" + "="*50)
+    print("Backtest Simulation")
+    print("="*50)
+
+    target_tickers = ["SPY", "0005.HK", "EPHE", "GLD", "QQQ"]
+    equally_weighted_allocation = [0.20, 0.20, 0.20, 0.20, 0.20]
+
+    performance_ledger = run_portfolio_backtest(
+        raw_prices_df=raw_prices,
+        weights=equally_weighted_allocation,
+        target_tickers=target_tickers,
+        cluster_labels=final_labels, 
+        transaction_fee_bps=5.0
+    )
+    print("\nPipeline executed completely")
+
 if __name__ == "__main__": 
-    # price_matrix = run_ingestion_pipeline()
-    # if not price_matrix.empty: 
-    #     print(price_matrix.head())
     main()
