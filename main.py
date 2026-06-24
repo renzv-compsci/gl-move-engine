@@ -1,6 +1,7 @@
 import pandas as pd 
 import sys 
 import io
+import numpy as np 
 
 if sys.platform.startswith('win'): 
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -12,6 +13,7 @@ from src.utils.preprocessing import run_preprocessing_pipeline
 from src.models.clustering import run_pca_decomposition, evaluate_elbow_optimization, fit_final_regime_model, generate_regime_profiles
 from src.portfolio.execution import allocate_portfolio_by_regime
 from src.portfolio.backtest import run_portfolio_backtest
+from src.utils.metrics import generate_performance_summary_report
 
 def run_ingestion_pipeline() -> pd.DataFrame: 
     print(f"Initializing ingestion")
@@ -32,6 +34,8 @@ def main():
         print("Pipeline cancelled. Missing raw data")
         return 
     
+    raw_prices.index = pd.to_datetime(raw_prices.index).tz_localize(None)
+    
     print("\nInitializing Signal Engineering Pipeline")
     scaled_X, financial_scaler = run_preprocessing_pipeline(raw_prices)
 
@@ -49,24 +53,39 @@ def main():
 
     print("\nFitting Definitive K-Means Model")
     labeled_timeline, final_kmeans_model = fit_final_regime_model(pca_df, n_clusters=4)
-   
-    if isinstance(labeled_timeline, pd.DataFrame): 
-        matched_col = None 
-        for col in labeled_timeline.columns: 
-            if any(k in col.lower() for k in ['cluster', 'regime', 'label']):
-                matched_col = col 
-                break
 
-            if matched_col: 
-                final_labels = labeled_timeline[matched_col].tolist()
-            else: 
-                final_labels = labeled_timeline.iloc[:, -1].tolist()
-    
-    elif isinstance(labeled_timeline, pd.Series): 
-        final_labels = labeled_timeline.tolist()
+    if isinstance(labeled_timeline, pd.DataFrame): 
+        cluster_col = None
+        for col in labeled_timeline.columns:
+            unique_vals = labeled_timeline[col].dropna().unique()
+            if len(unique_vals) <= 5 and all(isinstance(v, (int, np.integer)) or (hasattr(v, 'is_integer') and v.is_integer()) for v in unique_vals):
+                cluster_col = col
+                break
+        
+        if cluster_col is not None:
+            print(f"Detected Cluster Column: '{cluster_col}'")
+            raw_values = labeled_timeline[cluster_col].values
+        else:
+            matched_col = None 
+            for col in labeled_timeline.columns: 
+                if any(k in str(col).lower() for k in ['cluster', 'regime', 'label', 'pred']): 
+                    matched_col = col 
+                    break 
+            raw_values = labeled_timeline[matched_col].values if matched_col else labeled_timeline.iloc[:, -1].values
+    elif isinstance(labeled_timeline, pd.Series):
+        raw_values = labeled_timeline.values 
     else: 
-        final_labels = list(labeled_timeline)
-    
+        raw_values = np.array(labeled_timeline)
+
+    final_labels = pd.Series(raw_values, index=scaled_X.index).dropna().astype(int)
+
+    if isinstance(labeled_timeline, (pd.DataFrame, pd.Series)):
+        labeled_timeline.index = scaled_X.index
+
+    print("\nCluster Distribution Sent to Backtester:")
+    print(final_labels.value_counts().sort_index())
+    print("="*50)
+
     backtest_history, current_live_orders = allocate_portfolio_by_regime(labeled_timeline, total_capital=150000.0)
     regime_profiles = generate_regime_profiles(scaled_X, labeled_timeline)
     
@@ -95,6 +114,9 @@ def main():
         cluster_labels=final_labels, 
         transaction_fee_bps=5.0
     )
+    print("\nPipeline executed completely")
+
+    report_dictionary = generate_performance_summary_report(performance_ledger)
     print("\nPipeline executed completely")
 
 if __name__ == "__main__": 
