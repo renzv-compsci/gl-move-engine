@@ -14,6 +14,7 @@ from src.models.clustering import run_pca_decomposition, evaluate_elbow_optimiza
 from src.portfolio.execution import allocate_portfolio_by_regime
 from src.portfolio.backtest import run_portfolio_backtest
 from src.utils.metrics import generate_performance_summary_report
+from src.surveillance.anomaly import MarketSurveillanceEngine
 
 def run_ingestion_pipeline() -> pd.DataFrame: 
     print(f"Initializing ingestion")
@@ -54,6 +55,8 @@ def main():
     print("\nFitting Definitive K-Means Model")
     labeled_timeline, final_kmeans_model = fit_final_regime_model(pca_df, n_clusters=4)
 
+    target_cluster_col = None
+
     if isinstance(labeled_timeline, pd.DataFrame): 
         cluster_col = None
         for col in labeled_timeline.columns:
@@ -64,6 +67,7 @@ def main():
         
         if cluster_col is not None:
             print(f"Detected Cluster Column: '{cluster_col}'")
+            target_cluster_col = cluster_col
             raw_values = labeled_timeline[cluster_col].values
         else:
             matched_col = None 
@@ -71,7 +75,8 @@ def main():
                 if any(k in str(col).lower() for k in ['cluster', 'regime', 'label', 'pred']): 
                     matched_col = col 
                     break 
-            raw_values = labeled_timeline[matched_col].values if matched_col else labeled_timeline.iloc[:, -1].values
+            target_cluster_col = matched_col if matched_col else labeled_timeline.columns[-1]
+            raw_values = labeled_timeline[target_cluster_col].values
     elif isinstance(labeled_timeline, pd.Series):
         raw_values = labeled_timeline.values 
     else: 
@@ -81,6 +86,22 @@ def main():
 
     if isinstance(labeled_timeline, (pd.DataFrame, pd.Series)):
         labeled_timeline.index = scaled_X.index
+
+    SMOOTHING_WINDOW = 5  # 5 Trading Days = 1 Business Week
+    print(f"\n[⚡] Applying Temporal Smoothing Filter (Window: {SMOOTHING_WINDOW} days)...")
+    
+    final_labels = (
+        final_labels.rolling(window=SMOOTHING_WINDOW, min_periods=1)
+        .apply(lambda x: pd.Series(x).mode().iloc[0])
+        .astype(int)
+    )
+    
+    if isinstance(labeled_timeline, pd.DataFrame) and target_cluster_col is not None:
+        labeled_timeline[target_cluster_col] = final_labels
+    elif isinstance(labeled_timeline, pd.Series):
+        labeled_timeline = final_labels
+        
+    print("      Status: High-frequency noise filtered. Macro signals stabilized.")
 
     print("\nCluster Distribution Sent to Backtester:")
     print(final_labels.value_counts().sort_index())
@@ -118,6 +139,36 @@ def main():
 
     report_dictionary = generate_performance_summary_report(performance_ledger)
     print("\nPipeline executed completely")
+
+    print("\n" + "="*50)
+    print("Deploying Live Market Surveillance Machine Learning Layer")
+    print("="*50)
+
+    surveillance_system = MarketSurveillanceEngine(n_clusters=4)
+    print("Engineering rolling predictive feature matrices from raw assets.")
+    surveillance_features = surveillance_system.generate_surveillance_features(raw_prices)
+    
+    surveillance_system.train_supervisor(X=surveillance_features, y=final_labels)
+
+    print("Running live surveillance scan across full asset timelines.")
+    surveillance_results = surveillance_system.analyze_live_market(
+        current_features=surveillance_features, 
+        uncertainty_threshold=0.65
+    )
+
+    total_days_scanned = len(surveillance_results)
+    total_anomalies_flagged = surveillance_results['Anomaly_Flag'].sum()
+    anomaly_rate = (total_anomalies_flagged / total_days_scanned) * 100 if total_days_scanned > 0 else 0.0
+
+    print("\n" + "="*50)
+    print("          REAL-TIME ANOMALY DETECTOR SUMMARY AUDIT")
+    print("="*50)
+    print(f"  ├─ Total Timesteps Scanned   : {total_days_scanned} Days")
+    print(f"  ├─ Structural Anomalies Found: {total_anomalies_flagged} Days")
+    print(f"  └─ Portfolio Anomaly Rate    : {anomaly_rate:.2f}%")
+    print("="*50)
+
+    print("\nPipeline executed completely with Live XGBoost Surveillance online\n")
 
 if __name__ == "__main__": 
     main()
