@@ -15,13 +15,16 @@ def simulate_daily_portfolio_returns(raw_prices_df: pd.DataFrame, weights: list,
 
 def synchronize_portfolio_regimes(portfolio_returns_df: pd.DataFrame, cluster_labels: list) -> pd.DataFrame: 
     ledger_df = portfolio_returns_df.copy()
-    if len(ledger_df) != len(cluster_labels): 
-        sliced_labels = cluster_labels[-len(ledger_df):]
+
+    if isinstance(cluster_labels, pd.Series): 
+        ledger_df['Regime_Cluster'] = cluster_labels.reindex(ledger_df.index)
     else: 
-        sliced_labels = cluster_labels
-    
-    ledger_df['Regime_Cluster'] = sliced_labels 
-    ledger_df['Cumulative_Growth'] = (1 + ledger_df['Portfolio_Return']).cumprod()
+        if len(ledger_df) != len(cluster_labels): 
+            sliced_labels = cluster_labels[-len(ledger_df):]
+        else: 
+            sliced_labels = cluster_labels
+        ledger_df['Regime_Cluster'] = sliced_labels
+    ledger_df['Cumulative_Growth'] = np.exp(ledger_df['Portfolio_Return'].cumsum()) 
     return ledger_df
 
 def apply_transaction_costs(synchronized_ledger: pd.DataFrame, transaction_fee_bps: float = 5.0) -> pd.DataFrame: 
@@ -31,7 +34,7 @@ def apply_transaction_costs(synchronized_ledger: pd.DataFrame, transaction_fee_b
 
     cost_factor = transaction_fee_bps / 10000.0
     friction_df.loc[regime_shift_mask, 'Portfolio_Return'] -= cost_factor
-    friction_df['Cumulative_Growth'] = (1 + friction_df['Portfolio_Return']).cumprod()
+    friction_df['Cumulative_Growth'] = np.exp(friction_df['Portfolio_Return'].cumsum())
     return friction_df
 
 def run_portfolio_backtest(raw_prices_df: pd.DataFrame, weights: list, target_tickers: list, cluster_labels: list, transaction_fee_bps: float = 5.0) -> pd.DataFrame: 
@@ -42,15 +45,14 @@ def run_portfolio_backtest(raw_prices_df: pd.DataFrame, weights: list, target_ti
         target_tickers=target_tickers
     )
 
-    synchronized_leadger = synchronize_portfolio_regimes(
+    synchronized_ledger = synchronize_portfolio_regimes(
         portfolio_returns_df=base_returns_df,
         cluster_labels=cluster_labels
     )
 
     final_net_ledger = apply_transaction_costs(
-        synchronized_ledger=synchronized_leadger,
+        synchronized_ledger=synchronized_ledger,
         transaction_fee_bps=transaction_fee_bps
     )
     print(f"\nPerformance ledger generated successfully. Final cumulative capital multiplier: {final_net_ledger['Cumulative_Growth'].iloc[-1]:.4f}")
-
     return final_net_ledger
