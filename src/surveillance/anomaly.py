@@ -61,7 +61,7 @@ class MarketSurveillanceEngine:
         print("="*60)
         print(f"Out-of-Sample Accuracy: {accuracy_score(y_test, preds)*100:.2f}%")
         print("\nDetailed Performance Matrix:")
-        print(classification_report(y_test, preds))
+        print(classification_report(y_test, preds, zero_division=0))
         print("="*60)
         
         return self 
