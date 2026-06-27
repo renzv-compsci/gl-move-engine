@@ -5,10 +5,10 @@ def allocate_portfolio_by_regime(labeled_df: pd.DataFrame, total_capital: float 
     print("\nInitializing Portfolio Execution Layer")
 
     PORTFOLIO_PLAYBOOKS = {
-        0: {"Risk_Allocation": 1.00, "Cash_Allocation": 0.00, "Condition": "Quiet Sideways Baseline"},
-        1: {"Risk_Allocation": 0.40, "Cash_Allocation": 0.60, "Condition": "Crash State (Defensive 60/40)"},
-        2: {"Risk_Allocation": 1.00, "Cash_Allocation": 0.00, "Condition": "Standard Bull Grind"},
-        3: {"Risk_Allocation": 1.00, "Cash_Allocation": 0.00, "Condition": "Extreme Growth Outlier Day"}
+        0: {"Risk_Allocation": 0.00, "Cash_Allocation": 1.00, "Condition": "Market Liquidation State (Defensive Risk-Off)"}, # Was Regime 3
+        1: {"Risk_Allocation": 0.40, "Cash_Allocation": 0.60, "Condition": "Chop / Neutral Consolidation Phase"},            # Was Regime 0
+        2: {"Risk_Allocation": 1.00, "Cash_Allocation": 0.00, "Condition": "Standard Bull Grind Phase"},                     # Was Regime 1
+        3: {"Risk_Allocation": 1.00, "Cash_Allocation": 0.00, "Condition": "Parabolic Alpha Outlier Phase (Max Growth)"}     # Was Regime 2
     }
 
     latest_record = labeled_df.iloc[-1]
