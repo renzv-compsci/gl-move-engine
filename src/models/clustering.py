@@ -37,16 +37,27 @@ def evaluate_elbow_optimization(pca_df: pd.DataFrame, max_k: int = 10) -> Dict[i
     print("Elbow optimization calculations complete")
     return inertia_scores
 
-def fit_final_regime_model(pca_df: pd.DataFrame, n_clusters: int = 4) -> Tuple[pd.DataFrame, KMeans]: 
+def fit_final_regime_model(pca_df: pd.DataFrame, n_clusters: int = 4, scaled_X: pd.DataFrame = None) -> Tuple[pd.DataFrame, KMeans]: 
     print(f"\nFitting Definitive K-Means Model")
 
     kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
     cluster_labels = kmeans.fit_predict(pca_df)
     
-    labeled_df = pca_df.copy()
-    labeled_df['Regime'] = cluster_labels
+    if scaled_X is not None:  
+        performance_metrics = scaled_X.groupby(cluster_labels).mean().mean(axis=1)
+    else: 
+        print("scaled_X not provided. Sorting via PCA Component 1 proxy.")
+        performance_metrics = pca_df.groupby(cluster_labels).mean().iloc[:, 0]
+    
+    sorted_raw_clusters = performance_metrics.sort_values().index.tolist()
+    deterministic_mapping = {raw_id: ordered_id for ordered_id, raw_id in enumerate(sorted_raw_clusters)}
 
-    print("Regime Sample Distribution")
+    final_labels = pd.Series(cluster_labels).map(deterministic_mapping).values
+
+    labeled_df = pca_df.copy()
+    labeled_df['Regime'] = final_labels
+
+    print("Regime Sample Distribution (Analytically Sorted)")
     distribution = labeled_df['Regime'].value_counts().sort_index()
 
     for regime_id, count in distribution.items():
