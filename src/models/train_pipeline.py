@@ -26,6 +26,7 @@ def run_and_serialize_prod_pipeline(raw_prices_df: pd.DataFrame, target_dir: str
         print("  ├─ [1/4] Running Log Returns & Feature Scaling Pipeline")
         scaled_X, fitted_scaler = run_preprocessing_pipeline(raw_prices_df)
         
+        
         print("  ├─ [2/4] Executing PCA Principal Component Decomposition")
         pca_df, trained_pca = run_pca_decomposition(scaled_X, n_components=3)
 
