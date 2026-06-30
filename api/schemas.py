@@ -16,26 +16,27 @@ class MarketDataRequest(BaseModel):
         if provided_tickers != required_tickers: 
             missing = required_tickers - provided_tickers
             extra = provided_tickers - required_tickers
-            error_msg = "Invalid ticker keys matrix configuration"
+            error_msg = "Invalid ticker keys matrix configuration. "
             if missing: 
-                error_msg += f"Missing required targets: {list(missing)}"
+                error_msg += f"Missing required targets: {list(missing)}. "
             if extra: 
-                error_msg += f"Disallowed extra targets found: {list(extra)}"
-            raise ValueError(error_msg)
+                error_msg += f"Disallowed extra targets found: {list(extra)}. "
+            raise ValueError(error_msg.strip())
 
         lengths = {ticker: len(prices) for ticker, prices in v.items()}
         distinct_lengths = set(lengths.values())
 
         if len(distinct_lengths) != 1: 
             raise ValueError(
-                f"Mismatched time-series lenghts detected across asset nodes: {lengths}"
+                f"Mismatched time-series lengths detected across asset nodes: {lengths}"
             )
+        
         series_length = distinct_lengths.pop()
-        if series_length < 6: 
+        if series_length < 31: 
             raise ValueError(
                 f"Insufficient historical timeline window. Provided {series_length} values, "
-                f"but a minimum of 6 continuous trading days is structurally required to satisfy "
-                f"the 5-day temporal smoothing matrix filter after computing log returns."
+                f"but a minimum of 31 continuous trading days is structurally required to satisfy "
+                f"the 30-day rolling volatility and feature engineering lookback windows after computing log returns."
             )
         return v 
     

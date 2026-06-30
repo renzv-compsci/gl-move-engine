@@ -50,17 +50,22 @@ def predict_market_state(request: MarketDataRequest):
     
     try: 
         raw_df = pd.DataFrame(request.ticker_data)
-        raw_df.index = pd.date_range(end=datetime.utcnow(), period=len(raw_df), freq="D")
+        raw_df.index = pd.date_range(end=datetime.utcnow(), periods=len(raw_df), freq="D")
         log_returns = np.log(raw_df / raw_df.shift(1)).dropna()
 
         scaler = ARTIFACTS["scaler"]
+        if hasattr(scaler, "feature_names_in_"):
+            log_returns = log_returns[list(scaler.feature_names_in_)]
+            
         scaled_features = scaler.transform(log_returns)
-        scaled_df = pd.DataFrame(scaled_features, index=log_returns.index, column=log_returns.columns)
+        scaled_df = pd.DataFrame(scaled_features, index=log_returns.index, columns=log_returns.columns)
 
         pca_df, _ = run_pca_decomposition(scaled_df, n_components=3)
+        if not isinstance(pca_df, pd.DataFrame):
+            pca_df = pd.DataFrame(pca_df, index=scaled_df.index, columns=[f"PC{i+1}" for i in range(pca_df.shape[1])])
 
         kmeans = ARTIFACTS["kmeans"]
-        raw_cluster_labels = kmeans.predict(pca_df)
+        raw_cluster_labels = kmeans.predict(pca_df.values)
 
         cluster_series = pd.Series(raw_cluster_labels, index=pca_df.index)
         smoothed_labels = (
@@ -72,14 +77,35 @@ def predict_market_state(request: MarketDataRequest):
         current_regime = int(smoothed_labels.iloc[-1])
         xgboost_model = ARTIFACTS["xgboost_surv"]
 
-        surveillance_features = pd.DataFrame(
-            np.hstack([scaled_df.values, pca_df.values]),
-            index=scaled_df.index,
-            columns=list(scaled_df.columns) + list(pca_df.columns)
-        )
+        if hasattr(xgboost_model, "feature_names_in_"):
+            model_features = [str(f) for f in xgboost_model.feature_names_in_]
+        else:
+            model_features = [str(f) for f in xgboost_model.get_booster().feature_names]
 
-        latest_feature_row = surveillance_features.iloc[[-1]]
+        features_df = pd.DataFrame(index=log_returns.index)
+        tickers = ["SPY", "0005.HK", "EPHE", "GLD", "QQQ"]
+        
+        for t in tickers:
+            features_df[f"{t}_ret_5d"] = log_returns[t].rolling(window=5, min_periods=1).sum()
+            features_df[f"{t}_ret_21d"] = log_returns[t].rolling(window=21, min_periods=1).sum()
+            features_df[f"{t}_vol_10d"] = log_returns[t].rolling(window=10, min_periods=1).std().fillna(0)
+            features_df[f"{t}_vol_30d"] = log_returns[t].rolling(window=30, min_periods=1).std().fillna(0)
+            
+            roll_max = raw_df[t].rolling(window=21, min_periods=1).max()
+            features_df[f"{t}_drawdown_21d"] = ((raw_df[t] - roll_max) / roll_max).loc[log_returns.index]
 
+        features_df["cross_asset_dispersion_5d"] = log_returns[tickers].std(axis=1).rolling(window=5, min_periods=1).mean()
+        
+        missing_cols = [col for col in model_features if col not in features_df.columns]
+        if missing_cols:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Pipeline Alignment Failure. Missing Generated Columns: {missing_cols}. Available Columns: {list(features_df.columns)}"
+            )
+
+        features_df = features_df[model_features]
+        latest_feature_row = features_df.iloc[[-1]]
+        
         anomaly_pred = xgboost_model.predict(latest_feature_row)[0]
         anomaly_prob = xgboost_model.predict_proba(latest_feature_row)[0]
 
@@ -118,6 +144,7 @@ def predict_market_state(request: MarketDataRequest):
                 "weights": allocations.get(current_regime, allocations[0])
             }
         )
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e: 
         raise HTTPException(status_code=500, detail=f"Inference Engine Processing Failure: {str(e)}")
-        
