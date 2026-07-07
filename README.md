@@ -18,15 +18,17 @@ $$
 X_{base} = \left( \frac{X_t}{X_{start}} \right) \times 100
 $$
 
+*(Note: For the unsupervised machine learning pipeline, raw prices are strictly transformed into stationary continuous log-returns and standardized via Z-score normalization prior to dimensionality reduction).*
+
 ### 1.3 Dimensionality Reduction (PCA)
 
-Following base normalization, Principal Component Analysis (PCA) projects the $d$-dimensional feature space down to an orthogonal $k$-dimensional subspace to eliminate multicollinearity and isolate systemic variance:
+Following normalization, Principal Component Analysis (PCA) projects the $d$-dimensional feature space down to an orthogonal $k$-dimensional subspace to eliminate multicollinearity and isolate systemic variance:
 
 $$
 \Sigma = \frac{1}{n-1} (X_{base} - \bar{x})^T (X_{base} - \bar{x})
 $$
 
-- **Cumulative Variance Captured**: 45.74%
+- **Cumulative Variance Captured**: 84.64%
 - **Final Components**: 3
 
 ### 1.4 Unsupervised Regime Partitioning (K-Means)
@@ -49,12 +51,12 @@ The system achieves robust risk-adjusted returns by shifting target allocations 
 
 | Metric | Strategic Performance |
 |--------|-----------------------|
-| **Annualized Strategic Return** | 19.03% |
-| **Annualized Volatility Risk** | 11.98% |
-| **Strategy Sharpe Ratio** | 1.5878 |
-| **Strategy Sortino Ratio** | 2.1455 |
-| **Maximum Timeline Drawdown** | -12.14% |
-| **Cumulative Capital Multiplier** | 1.97x |
+| **Annualized Strategic Return** | 19.62% |
+| **Annualized Volatility Risk** | 11.97% |
+| **Strategy Sharpe Ratio** | 1.6386 |
+| **Strategy Sortino Ratio** | 2.2008 |
+| **Maximum Timeline Drawdown** | -12.01% |
+| **Cumulative Capital Multiplier** | 2.02x |
 
 ---
 
@@ -64,10 +66,10 @@ The following table defines the analytical asset behaviors observed within each 
 
 | Regime ID | Days Allocated | Ann. Return | Ann. Volatility | Max Drawdown |
 |-----------|---------------:|------------:|----------------:|-------------:|
-| **Regime 0** | 102 | -59.85% | 19.09% | -10.70% |
-| **Regime 1** | 477 | 5.92% | 10.27% | -9.19% |
-| **Regime 2** | 309 | 55.63% | 10.29% | -7.43% |
-| **Regime 3** | 12 | 267.84% | 13.54% | 0.00% |
+| **Regime 0** | 139 | -50.18% | 18.08% | -10.66% |
+| **Regime 1** | 58 | -44.96% | 14.04% | -6.61% |
+| **Regime 2** | 612 | 25.26% | 9.22% | -8.03% |
+| **Regime 3** | 94 | 125.94% | 11.86% | -8.08% |
 
 ---
 
@@ -77,10 +79,10 @@ While the framework compresses cross-asset data into a singular operational regi
 
 Relying solely on an automated model output creates blind spots during black-swan structural breaks or liquidity anomalies. It is vital for risk professionals to look past the consolidated mathematical metric and monitor the raw live streams of individual assets. This guarantees a granular, macro-level grasp of microstructural shifts happening across specific regions and asset types simultaneously.
 
-- **Total Timesteps Scanned**: 871 Days
-- **Structural Anomalies Detected**: 46 Days
-- **Portfolio Anomaly Rate**: 5.28%
-- **Surveillance Classification Accuracy (Out-of-Sample)**: 74.86%
+- **Total Timesteps Scanned**: 874 Days
+- **Structural Anomalies Detected**: 30 Days
+- **Portfolio Anomaly Rate**: 3.43%
+- **Surveillance Classification Accuracy (Out-of-Sample)**: 81.71%
 
 ---
 
@@ -123,4 +125,3 @@ GL-MOVE-ENGINE/
 │   └── utils/            # Data orchestration (yfinance ingestion, rolling window)
 ├── main.py               # Production entry point
 └── requirements.txt
-```
