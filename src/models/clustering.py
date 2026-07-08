@@ -13,7 +13,7 @@ def run_pca_decomposition(scaled_df: pd.DataFrame, n_components: int = 3) -> Tup
         n_components = max_possible_components
     print(f"Executing PCA Decomposition (Final Components: {n_components})")
 
-    pca = PCA(n_components==n_components, random_state=42)
+    pca = PCA(n_components=n_components, random_state=42)
     pca_matrix = pca.fit_transform(scaled_df)
 
     explained_var = pca.explained_variance_ratio_
